@@ -1,0 +1,10 @@
+﻿# Editor
+.vscode/
+
+# Build output
+bin/
+obj/
+node_modules/
+
+# Secrets
+.env

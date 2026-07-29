@@ -31,6 +31,10 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/openapi/v1.json", "backend API v1");
+    });
 }
 
 using (var scope = app.Services.CreateScope())

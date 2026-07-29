@@ -21,6 +21,7 @@ services:
       context: ./backend
     restart: unless-stopped
     environment:
+      ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       VOYAGE_API_KEY: ${VOYAGE_API_KEY}

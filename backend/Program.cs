@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using Anthropic;
 using backend.Data;
 using backend.Endpoints;
 using backend.Services;
@@ -26,6 +27,15 @@ builder.Services.AddHttpClient<VoyageEmbeddingClient>((sp, client) =>
 builder.Services.AddSingleton<IDocumentProcessingQueue, DocumentProcessingQueue>();
 builder.Services.AddHostedService<DocumentProcessingWorker>();
 
+builder.Services.AddSingleton(sp =>
+{
+    var apiKey = sp.GetRequiredService<IConfiguration>()["ANTHROPIC_API_KEY"];
+    if (string.IsNullOrWhiteSpace(apiKey))
+        throw new InvalidOperationException("ANTHROPIC_API_KEY is not configured.");
+
+    return new AnthropicClient { ApiKey = apiKey };
+});
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -45,5 +55,6 @@ using (var scope = app.Services.CreateScope())
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 app.MapDocumentEndpoints();
+app.MapChatEndpoints();
 
 app.Run();

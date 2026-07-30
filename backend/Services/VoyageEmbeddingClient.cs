@@ -9,7 +9,21 @@ public class VoyageEmbeddingClient(HttpClient httpClient)
     private const int OutputDimension = 1024;
     private const int MaxBatchSize = 100;
 
-    public async Task<List<float[]>> EmbedDocumentsAsync(IReadOnlyList<string> texts, CancellationToken cancellationToken)
+    // Voyage embeds queries and documents differently, so retrieval quality depends
+    // on using the matching input_type for each side.
+    private const string InputTypeDocument = "document";
+    private const string InputTypeQuery = "query";
+
+    public Task<List<float[]>> EmbedDocumentsAsync(IReadOnlyList<string> texts, CancellationToken cancellationToken) =>
+        EmbedAsync(texts, InputTypeDocument, cancellationToken);
+
+    public async Task<float[]> EmbedQueryAsync(string text, CancellationToken cancellationToken)
+    {
+        var embeddings = await EmbedAsync([text], InputTypeQuery, cancellationToken);
+        return embeddings[0];
+    }
+
+    private async Task<List<float[]>> EmbedAsync(IReadOnlyList<string> texts, string inputType, CancellationToken cancellationToken)
     {
         var embeddings = new List<float[]>(texts.Count);
 
@@ -19,7 +33,7 @@ public class VoyageEmbeddingClient(HttpClient httpClient)
             {
                 Input = batch,
                 Model = Model,
-                InputType = "document",
+                InputType = inputType,
                 OutputDimension = OutputDimension,
             };
 

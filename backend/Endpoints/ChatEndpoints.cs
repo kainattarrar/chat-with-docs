@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using Anthropic;
 using Anthropic.Models.Messages;
@@ -19,12 +18,6 @@ public static class ChatEndpoints
     private const long MaxTokens = 1024;
     private const string DefaultModel = "claude-haiku-4-5-20251001";
 
-    // Cosine distance above which a chunk is considered irrelevant to the question and
-    // dropped before it reaches the client or Claude. Measured empirically: genuinely
-    // relevant chunks landed around 0.36-0.46, unrelated ones around 0.85-0.93 — 0.65
-    // sits in the gap. May need re-tuning once there's more/larger documents to test against.
-    private const double MaxRelevantDistance = 0.65;
-
     private const string SystemPrompt =
         "Answer the user's question using ONLY the provided context passages. " +
         "If the answer isn't in the context, say it isn't found in the documents rather than guessing. " +
@@ -33,10 +26,8 @@ public static class ChatEndpoints
     private const string NoDocumentsMessage =
         "No documents have been added yet, so there's nothing to search. Upload a document and ask again.";
 
-    private const string NoRelevantChunksMessage =
-        "I couldn't find anything relevant to that question in the uploaded documents.";
-
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly object[] NoSources = [];
 
     public static void MapChatEndpoints(this WebApplication app)
     {
@@ -68,35 +59,15 @@ public static class ChatEndpoints
         try
         {
             var hasAnyChunks = await db.Chunks.AnyAsync(cancellationToken);
-            var chunks = hasAnyChunks
-                ? await RetrieveTopChunksAsync(db, embeddingClient, request.Question, cancellationToken)
-                : [];
-
-            var sources = chunks
-                .Select(c => new
-                {
-                    documentId = c.DocumentId,
-                    fileName = c.FileName,
-                    chunkIndex = c.ChunkIndex,
-                    snippet = Truncate(c.Content, SnippetLength),
-                })
-                .ToList();
-
-            await WriteEventAsync(context.Response, "sources", sources, cancellationToken);
-
             if (!hasAnyChunks)
             {
+                await WriteEventAsync(context.Response, "sources", NoSources, cancellationToken);
                 await WriteEventAsync(context.Response, "token", new { text = NoDocumentsMessage }, cancellationToken);
                 await WriteEventAsync(context.Response, "done", new { }, cancellationToken);
                 return;
             }
 
-            if (chunks.Count == 0)
-            {
-                await WriteEventAsync(context.Response, "token", new { text = NoRelevantChunksMessage }, cancellationToken);
-                await WriteEventAsync(context.Response, "done", new { }, cancellationToken);
-                return;
-            }
+            var chunks = await RetrieveTopChunksAsync(db, embeddingClient, request.Question, cancellationToken);
 
             var model = configuration["Claude:Model"] ?? DefaultModel;
             var parameters = new MessageCreateParams
@@ -107,14 +78,41 @@ public static class ChatEndpoints
                 Model = model,
             };
 
+            // Citations tell us which document blocks Claude actually grounded its answer in —
+            // that, not raw top-K retrieval, is what determines what we surface as "sources".
+            var citedDocumentIndices = new List<long>();
+            var seenIndices = new HashSet<long>();
+
             await foreach (var rawEvent in anthropicClient.Messages.CreateStreaming(parameters, cancellationToken))
             {
-                if (rawEvent.TryPickContentBlockDelta(out var delta) && delta.Delta.TryPickText(out var text))
+                if (!rawEvent.TryPickContentBlockDelta(out var contentDelta))
+                    continue;
+
+                if (contentDelta.Delta.TryPickText(out var text))
                 {
                     await WriteEventAsync(context.Response, "token", new { text = text.Text }, cancellationToken);
                 }
+                else if (contentDelta.Delta.TryPickCitations(out var citationsDelta)
+                    && citationsDelta.Citation.DocumentIndex is long documentIndex
+                    && seenIndices.Add(documentIndex))
+                {
+                    citedDocumentIndices.Add(documentIndex);
+                }
             }
 
+            var sources = citedDocumentIndices
+                .Where(i => i >= 0 && i < chunks.Count)
+                .Select(i => chunks[(int)i])
+                .Select(c => new
+                {
+                    documentId = c.DocumentId,
+                    fileName = c.FileName,
+                    chunkIndex = c.ChunkIndex,
+                    snippet = Truncate(c.Content, SnippetLength),
+                })
+                .ToList();
+
+            await WriteEventAsync(context.Response, "sources", sources, cancellationToken);
             await WriteEventAsync(context.Response, "done", new { }, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -156,25 +154,29 @@ public static class ChatEndpoints
             })
             .OrderBy(x => x.Distance)
             .Take(TopK)
-            .Where(x => x.Distance <= MaxRelevantDistance)
             .Select(x => new ChunkSearchResult(x.DocumentId, x.FileName, x.ChunkIndex, x.Content))
             .ToListAsync(cancellationToken);
     }
 
-    private static string BuildUserContent(IReadOnlyList<ChunkSearchResult> chunks, string question)
+    // One document content block per retrieved chunk, citations enabled, so Claude's response
+    // tags each grounded claim with the document_index it came from. document_index lines up
+    // with this list's order since only document blocks (not the trailing text block) count.
+    private static List<ContentBlockParam> BuildUserContent(IReadOnlyList<ChunkSearchResult> chunks, string question)
     {
-        var sb = new StringBuilder();
+        List<ContentBlockParam> content = [];
 
-        for (var i = 0; i < chunks.Count; i++)
+        foreach (var chunk in chunks)
         {
-            sb.AppendLine($"[{i + 1}] (from \"{chunks[i].FileName}\"):");
-            sb.AppendLine(chunks[i].Content);
-            sb.AppendLine();
+            content.Add(new DocumentBlockParam(new PlainTextSource(chunk.Content))
+            {
+                Title = chunk.FileName,
+                Citations = new CitationsConfigParam { Enabled = true },
+            });
         }
 
-        sb.Append("Question: ").Append(question);
+        content.Add(new TextBlockParam($"Question: {question}"));
 
-        return sb.ToString();
+        return content;
     }
 
     private static string Truncate(string text, int maxLength) =>

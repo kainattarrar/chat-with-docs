@@ -19,6 +19,12 @@ public static class ChatEndpoints
     private const long MaxTokens = 1024;
     private const string DefaultModel = "claude-haiku-4-5-20251001";
 
+    // Cosine distance above which a chunk is considered irrelevant to the question and
+    // dropped before it reaches the client or Claude. Measured empirically: genuinely
+    // relevant chunks landed around 0.36-0.46, unrelated ones around 0.85-0.93 — 0.65
+    // sits in the gap. May need re-tuning once there's more/larger documents to test against.
+    private const double MaxRelevantDistance = 0.65;
+
     private const string SystemPrompt =
         "Answer the user's question using ONLY the provided context passages. " +
         "If the answer isn't in the context, say it isn't found in the documents rather than guessing. " +
@@ -26,6 +32,9 @@ public static class ChatEndpoints
 
     private const string NoDocumentsMessage =
         "No documents have been added yet, so there's nothing to search. Upload a document and ask again.";
+
+    private const string NoRelevantChunksMessage =
+        "I couldn't find anything relevant to that question in the uploaded documents.";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -58,7 +67,10 @@ public static class ChatEndpoints
 
         try
         {
-            var chunks = await RetrieveTopChunksAsync(db, embeddingClient, request.Question, cancellationToken);
+            var hasAnyChunks = await db.Chunks.AnyAsync(cancellationToken);
+            var chunks = hasAnyChunks
+                ? await RetrieveTopChunksAsync(db, embeddingClient, request.Question, cancellationToken)
+                : [];
 
             var sources = chunks
                 .Select(c => new
@@ -72,9 +84,16 @@ public static class ChatEndpoints
 
             await WriteEventAsync(context.Response, "sources", sources, cancellationToken);
 
-            if (chunks.Count == 0)
+            if (!hasAnyChunks)
             {
                 await WriteEventAsync(context.Response, "token", new { text = NoDocumentsMessage }, cancellationToken);
+                await WriteEventAsync(context.Response, "done", new { }, cancellationToken);
+                return;
+            }
+
+            if (chunks.Count == 0)
+            {
+                await WriteEventAsync(context.Response, "token", new { text = NoRelevantChunksMessage }, cancellationToken);
                 await WriteEventAsync(context.Response, "done", new { }, cancellationToken);
                 return;
             }
@@ -123,17 +142,22 @@ public static class ChatEndpoints
         string question,
         CancellationToken cancellationToken)
     {
-        var hasAnyChunks = await db.Chunks.AnyAsync(cancellationToken);
-        if (!hasAnyChunks)
-            return [];
-
         var queryEmbedding = await embeddingClient.EmbedQueryAsync(question, cancellationToken);
         var queryVector = new Vector(queryEmbedding);
 
         return await db.Chunks
-            .OrderBy(c => c.Embedding!.CosineDistance(queryVector))
+            .Select(c => new
+            {
+                c.DocumentId,
+                FileName = c.Document.FileName,
+                c.ChunkIndex,
+                c.Content,
+                Distance = c.Embedding!.CosineDistance(queryVector),
+            })
+            .OrderBy(x => x.Distance)
             .Take(TopK)
-            .Select(c => new ChunkSearchResult(c.DocumentId, c.Document.FileName, c.ChunkIndex, c.Content))
+            .Where(x => x.Distance <= MaxRelevantDistance)
+            .Select(x => new ChunkSearchResult(x.DocumentId, x.FileName, x.ChunkIndex, x.Content))
             .ToListAsync(cancellationToken);
     }
 

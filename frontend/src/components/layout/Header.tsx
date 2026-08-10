@@ -1,4 +1,4 @@
-import { ConnectionStatus } from "@/components/ConnectionStatus";
+import { ConnectionStatus } from "@/components/ui/ConnectionStatus";
 
 export function Header() {
   return (

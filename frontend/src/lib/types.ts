@@ -1,6 +1,5 @@
-// Mirrors backend DTOs. Document/document-list endpoints don't exist yet
-// (Phase 5); these types are defined now so later phases have one shared
-// source of truth instead of each screen inventing its own shape.
+// Mirrors backend DTOs — one shared source of truth instead of each screen
+// inventing its own shape.
 
 export type DocumentStatus = "Processing" | "Ready" | "Failed";
 
@@ -9,7 +8,9 @@ export interface Document {
   fileName: string;
   status: DocumentStatus;
   createdAt: string;
-  updatedAt: string;
+  // Not returned by GET /api/documents (DocumentSummary omits it); present
+  // only where the backend actually sends it.
+  updatedAt?: string;
 }
 
 export interface ChatSource {

@@ -1,5 +1,7 @@
 using ChatWithDocs.Application.Common;
 using ChatWithDocs.Application.Documents.Commands;
+using ChatWithDocs.Application.Documents.Queries;
+using ChatWithDocs.Application.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,6 +11,13 @@ namespace ChatWithDocs.Api.Controllers;
 [Route("api/documents")]
 public class DocumentsController(IMediator mediator) : ControllerBase
 {
+    [HttpGet]
+    public async Task<ActionResult<List<DocumentSummary>>> List(CancellationToken cancellationToken)
+    {
+        var documents = await mediator.Send(new ListDocumentsQuery(), cancellationToken);
+        return Ok(documents);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Upload(IFormFile? file, CancellationToken cancellationToken)
     {
@@ -28,6 +37,13 @@ public class DocumentsController(IMediator mediator) : ControllerBase
         var result = await mediator.Send(new UploadDocumentCommand(file.FileName, pdfBytes), cancellationToken);
 
         return Accepted(value: new { id = result.Id, status = result.Status });
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        var deleted = await mediator.Send(new DeleteDocumentCommand(id), cancellationToken);
+        return deleted ? NoContent() : NotFound();
     }
 
     private static bool IsPdfSignature(byte[] bytes) =>

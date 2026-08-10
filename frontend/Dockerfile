@@ -1,6 +1,11 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 
+# NEXT_PUBLIC_* vars are inlined into the JS bundle at build time, so this
+# must be a build arg, not just a runtime environment variable.
+ARG NEXT_PUBLIC_API_URL=http://localhost:5000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 COPY package.json package-lock.json ./
 RUN npm ci
 

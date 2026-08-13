@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { ChatSource } from "@/lib/types";
 
+// Minimal shape shared by both the live-streaming ChatSource (has
+// documentId) and the persisted ConversationMessageSource (doesn't) — lets
+// this component render sources from either path without casting.
 interface SourcesListProps {
-  sources: ChatSource[];
+  sources: { fileName: string; chunkIndex: number; snippet: string }[];
 }
 
 export function SourcesList({ sources }: SourcesListProps) {
@@ -23,7 +25,7 @@ export function SourcesList({ sources }: SourcesListProps) {
         <ul className="mt-2 space-y-2">
           {sources.map((source, index) => (
             <li
-              key={`${source.documentId}-${source.chunkIndex}`}
+              key={`${source.fileName}-${source.chunkIndex}-${index}`}
               className="rounded-md bg-zinc-50 p-2 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400"
             >
               <p className="font-medium text-zinc-700 dark:text-zinc-300">

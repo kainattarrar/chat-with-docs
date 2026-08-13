@@ -1,8 +1,12 @@
 import type {
+  ChatConversationEvent,
+  ChatDoneEvent,
   ChatErrorEvent,
   ChatSourcesEvent,
   ChatStreamEvent,
   ChatTokenEvent,
+  ConversationDetail,
+  ConversationSummary,
   Document,
 } from "@/lib/types";
 
@@ -45,6 +49,29 @@ export async function deleteDocument(id: string): Promise<void> {
   const response = await apiFetch(`/api/documents/${id}`, { method: "DELETE" });
   if (!response.ok) {
     throw new ApiError("Couldn't delete the document.", response.status);
+  }
+}
+
+export async function listConversations(): Promise<ConversationSummary[]> {
+  const response = await apiFetch("/api/conversations");
+  if (!response.ok) {
+    throw new ApiError("Couldn't load conversations.", response.status);
+  }
+  return response.json();
+}
+
+export async function getConversation(id: string): Promise<ConversationDetail> {
+  const response = await apiFetch(`/api/conversations/${id}`);
+  if (!response.ok) {
+    throw new ApiError("Couldn't load the conversation.", response.status);
+  }
+  return response.json();
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  const response = await apiFetch(`/api/conversations/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new ApiError("Couldn't delete the conversation.", response.status);
   }
 }
 
@@ -94,12 +121,15 @@ export function uploadDocument(
 // is buffered and only complete events (delimited by a blank line) are parsed.
 export async function* streamChat(
   question: string,
+  conversationId: string | undefined,
   signal?: AbortSignal,
 ): AsyncGenerator<ChatStreamEvent> {
   const response = await apiFetch("/api/chat", {
     method: "POST",
+    // JSON.stringify drops keys with an undefined value, so conversationId is
+    // naturally omitted for a fresh chat rather than sent as null/"undefined".
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, conversationId }),
     signal,
   });
 
@@ -151,12 +181,14 @@ function parseSseEvent(raw: string): ChatStreamEvent | null {
   }
 
   switch (eventName) {
+    case "conversation":
+      return { event: "conversation", data: data as ChatConversationEvent };
     case "sources":
       return { event: "sources", data: data as ChatSourcesEvent };
     case "token":
       return { event: "token", data: data as ChatTokenEvent };
     case "done":
-      return { event: "done", data: {} };
+      return { event: "done", data: data as ChatDoneEvent };
     case "error":
       return { event: "error", data: data as ChatErrorEvent };
     default:

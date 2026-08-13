@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { useChatContext } from "@/features/chat/context/ChatContext";
 
 export function Header() {
-  const { clearChat } = useChatContext();
+  const { startNewChat, isStreaming } = useChatContext();
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 px-4 dark:border-zinc-800">
@@ -15,7 +15,7 @@ export function Header() {
         </h1>
         <ConnectionStatus />
       </div>
-      <Button variant="secondary" onClick={clearChat}>
+      <Button variant="secondary" onClick={startNewChat} disabled={isStreaming}>
         New chat
       </Button>
     </header>

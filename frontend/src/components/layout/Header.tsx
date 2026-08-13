@@ -1,6 +1,12 @@
+"use client";
+
 import { ConnectionStatus } from "@/components/ui/ConnectionStatus";
+import { Button } from "@/components/ui/Button";
+import { useChatContext } from "@/features/chat/context/ChatContext";
 
 export function Header() {
+  const { clearChat } = useChatContext();
+
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 px-4 dark:border-zinc-800">
       <div className="flex items-center gap-3">
@@ -9,13 +15,9 @@ export function Header() {
         </h1>
         <ConnectionStatus />
       </div>
-      <button
-        type="button"
-        disabled
-        className="cursor-not-allowed rounded-md border border-zinc-200 px-3 py-1.5 text-sm text-zinc-400 dark:border-zinc-800 dark:text-zinc-600"
-      >
+      <Button variant="secondary" onClick={clearChat}>
         New chat
-      </button>
+      </Button>
     </header>
   );
 }

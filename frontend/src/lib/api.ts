@@ -1,4 +1,10 @@
-import type { Document } from "@/lib/types";
+import type {
+  ChatErrorEvent,
+  ChatSourcesEvent,
+  ChatStreamEvent,
+  ChatTokenEvent,
+  Document,
+} from "@/lib/types";
 
 // Every backend call goes through this module — no other file should
 // construct a request URL directly.
@@ -80,4 +86,80 @@ export function uploadDocument(
     formData.append("file", file);
     xhr.send(formData);
   });
+}
+
+// EventSource can't be used here — it's GET-only, and this endpoint takes a
+// JSON POST body. So this reads the raw stream via fetch + ReadableStream and
+// parses SSE by hand. Network reads don't align to event boundaries, so text
+// is buffered and only complete events (delimited by a blank line) are parsed.
+export async function* streamChat(
+  question: string,
+  signal?: AbortSignal,
+): AsyncGenerator<ChatStreamEvent> {
+  const response = await apiFetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+    signal,
+  });
+
+  if (!response.ok || !response.body) {
+    throw new ApiError("Couldn't reach the chat service.", response.status);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    let separatorIndex: number;
+    while ((separatorIndex = buffer.indexOf("\n\n")) !== -1) {
+      const rawEvent = buffer.slice(0, separatorIndex);
+      buffer = buffer.slice(separatorIndex + 2);
+
+      const parsed = parseSseEvent(rawEvent);
+      if (parsed) yield parsed;
+    }
+  }
+}
+
+function parseSseEvent(raw: string): ChatStreamEvent | null {
+  let eventName: string | null = null;
+  const dataLines: string[] = [];
+
+  for (const line of raw.split("\n")) {
+    if (line.startsWith("event:")) {
+      eventName = line.slice("event:".length).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trim());
+    }
+  }
+
+  if (!eventName) return null;
+
+  const dataText = dataLines.join("\n");
+  let data: unknown;
+  try {
+    data = dataText ? JSON.parse(dataText) : {};
+  } catch {
+    return null;
+  }
+
+  switch (eventName) {
+    case "sources":
+      return { event: "sources", data: data as ChatSourcesEvent };
+    case "token":
+      return { event: "token", data: data as ChatTokenEvent };
+    case "done":
+      return { event: "done", data: {} };
+    case "error":
+      return { event: "error", data: data as ChatErrorEvent };
+    default:
+      return null;
+  }
 }

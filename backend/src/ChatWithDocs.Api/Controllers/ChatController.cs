@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ChatWithDocs.Api.Controllers;
 
-public record AskQuestionRequest(string Question);
+public record AskQuestionRequest(string Question, Guid? ConversationId);
 
 [ApiController]
 [Route("api/chat")]
@@ -29,18 +29,21 @@ public class ChatController(IMediator mediator, ILogger<ChatController> logger) 
 
         try
         {
-            await foreach (var streamEvent in mediator.CreateStream(new AskQuestionQuery(request.Question), cancellationToken))
+            await foreach (var streamEvent in mediator.CreateStream(new AskQuestionQuery(request.Question, request.ConversationId), cancellationToken))
             {
                 switch (streamEvent)
                 {
+                    case ConversationStreamEvent conversation:
+                        await WriteEventAsync("conversation", new { conversationId = conversation.ConversationId }, cancellationToken);
+                        break;
                     case SourcesStreamEvent sources:
                         await WriteEventAsync("sources", sources.Sources, cancellationToken);
                         break;
                     case TokenStreamEvent token:
                         await WriteEventAsync("token", new { text = token.Text }, cancellationToken);
                         break;
-                    case DoneStreamEvent:
-                        await WriteEventAsync("done", new { }, cancellationToken);
+                    case DoneStreamEvent done:
+                        await WriteEventAsync("done", new { conversationId = done.ConversationId, title = done.Title }, cancellationToken);
                         break;
                 }
             }

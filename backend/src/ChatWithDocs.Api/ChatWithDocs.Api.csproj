@@ -8,12 +8,20 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.11" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />
+    <!-- Required by the EF Core CLI tools, which drive design-time operations (like
+         migrations) from the startup project — Infrastructure's own reference to this
+         package is PrivateAssets="all" and deliberately doesn't flow transitively. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.11">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>c58ae445-f472-4b2e-9f3a-35d2c6b8492e</UserSecretsId>
   </PropertyGroup>
 
 </Project>

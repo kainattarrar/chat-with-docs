@@ -23,6 +23,8 @@ public static class DependencyInjection
 
         services.AddScoped<IDocumentRepository, DocumentRepository>();
         services.AddScoped<IChunkRepository, ChunkRepository>();
+        services.AddScoped<IConversationRepository, ConversationRepository>();
+        services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         services.AddHttpClient<IEmbeddingService, VoyageEmbeddingClient>((sp, client) =>
@@ -44,6 +46,7 @@ public static class DependencyInjection
             return new AnthropicClient { ApiKey = apiKey };
         });
         services.AddScoped<IChatService, AnthropicChatService>();
+        services.AddScoped<ITitleGenerationService, AnthropicTitleGenerationService>();
 
         services.AddSingleton<IDocumentProcessingQueue, DocumentProcessingQueue>();
         services.AddHostedService<DocumentProcessingWorker>();

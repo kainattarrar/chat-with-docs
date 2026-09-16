@@ -6,6 +6,7 @@ bin/
 obj/
 node_modules/
 .next/
+.DS_Store
 
 # Secrets
 .env

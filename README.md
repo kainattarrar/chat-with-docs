@@ -4,6 +4,7 @@ An AI-powered **RAG** application: upload your PDFs and ask questions about them
 
 Built from scratch as an end-to-end system-design showcase: a **Clean Architecture** ASP.NET Core backend, a **Next.js** frontend, **PostgreSQL + pgvector** for storage and semantic search, and **Docker** for a one-command local run.
 
+[![CI](https://github.com/kainattarrar/chat-with-docs/actions/workflows/ci.yml/badge.svg)](https://github.com/kainattarrar/chat-with-docs/actions/workflows/ci.yml)
 ![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16_+_pgvector-4169E1)

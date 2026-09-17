@@ -15,6 +15,12 @@ Built from scratch as an end-to-end system-design showcase: a **Clean Architectu
 
 ![Chat With Your Documents — demo](docs/demo.png)
 
+![Chat With Your Documents — demo1](docs/demo1.png)
+
+![Chat With Your Documents — demo2](docs/demo2.png)
+
+![Chat With Your Documents — demo3](docs/demo3.png)
+
 ---
 
 ## Features

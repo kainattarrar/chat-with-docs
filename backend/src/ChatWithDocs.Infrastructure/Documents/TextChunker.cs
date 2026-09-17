@@ -21,7 +21,15 @@ public static partial class TextChunker
             if (current.Length > 0 && current.Length + segment.Length + 1 > ChunkSize)
             {
                 chunks.Add(current.ToString().Trim());
-                current = new StringBuilder(TakeOverlap(chunks[^1]));
+
+                // Only carry the overlap into the new chunk if it still leaves room for
+                // this segment - otherwise start fresh instead of immediately exceeding
+                // ChunkSize. This matters when a segment is itself close to ChunkSize
+                // (e.g. the hard-wrap fallback), where seed + segment could overflow.
+                var overlapSeed = TakeOverlap(chunks[^1]);
+                current = overlapSeed.Length + segment.Length + 1 <= ChunkSize
+                    ? new StringBuilder(overlapSeed)
+                    : new StringBuilder();
             }
 
             if (current.Length > 0)

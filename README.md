@@ -12,9 +12,8 @@ Built from scratch as an end-to-end system-design showcase: a **Clean Architectu
 
 > **RAG (Retrieval-Augmented Generation):** instead of asking a language model a question blindly, the app first retrieves the most relevant passages from your own documents, then asks the model to answer using only that context. Responses are grounded in your data rather than the model's training memory — and because the retrieved passages are known, each answer can be traced back to its sources.
 
-<!-- DEMO: a screenshot or short GIF of the chat (a streamed answer with its Sources section) goes here. Add the image to a docs/ folder and reference it, e.g.:
-![Chat With Your Documents — demo](docs/demo.gif)
--->
+
+![Chat With Your Documents — demo](docs/demo.png)
 
 ---
 
